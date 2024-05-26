@@ -1,0 +1,315 @@
+{% extends '@EasyAdmin/crud/index.html.twig' %}
+
+{% block head_stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('style.css') }}">
+{% endblock head_stylesheets %}
+
+{% form_theme filterForm 'easyadmin/crud/form_theme.html.twig' %}
+
+{% block main %}
+    {{ parent() }}
+    <hr>
+    <section class="survey_after_receipt_charts">
+        <fieldset style="width: 35%;">
+                <legend>Фильтр для графиков:</legend>
+                {{ form_start(filterForm, 
+                     {'action': path('#'), 
+                     'method': 'POST', 
+                     'attr': {'id': 'survey_after_receipt_form'} 
+                     }) 
+                }}
+                    {{ form_row(filterForm.action) }}
+                    {{ form_row(filterForm.dateStart) }}
+                    {{ form_row(filterForm.dateEnd) }}
+                    <div style="margin-top: 5px;"><button id="survey_after_receipt_btn" class="btn btn-lg btn-primary" type="submit">Построить</button></div>
+                {{ form_end(filterForm) }}
+        </fieldset>
+        <div class="rating_chart_wrapper">
+            <h2 class="rating_chart_title">Диаграмма рейтингов</h2>
+            <div class="rating_chart_content"></div>
+            <div id="rating_chart_error" class="chart_error"></div>
+        </div>
+    <hr>
+        <div class="reason_for_participation_chart_wrapper">
+            <h2 class="reason_chart_title">График с ответами на вопрос...</h2>
+             <div class="reason_for_participation_chart_content"></div>
+            <div id="reason_for_participation_chart_error" class="chart_error"></div>
+        </div>
+    <hr>
+        <div class="source_info_chart_wrapper">
+            <h2 class="source_chart_title">График с ответами на вопрос...</h2>
+             <div class="source_info_chart_content"></div>
+            <div id="source_info_chart_error" class="chart_error"></div>
+        </div>
+    <hr>
+    </section>
+{% endblock main %}
+
+{% block body_javascript %}
+    <script src="{{ asset('/apexcharts.min.js') }}" type="text/javascript"></script>
+    <script>
+        var form    = document.getElementById('survey_after_receipt_form');
+        var wrapper = document.querySelector('.wrapper');
+        var btn     = document.getElementById('survey_after_receipt_btn');
+
+        var ratingChartNode = document.querySelector('.rating_chart_content');
+        var reasonChartNode = document.querySelector('.reason_for_participation_chart_content');
+        var sourceChartNode = document.querySelector('.source_info_chart_content');
+
+        var ratingErrorNode = document.getElementById('rating_chart_error');
+        var reasonErrorNode = document.getElementById('reason_for_participation_chart_error');
+        var sourceErrorNode = document.getElementById('source_info_chart_error');
+
+        var ratingChart;
+        let reasonChart;
+        var sourceChart;
+        var errorMessage = 'Для указанных параметров в фильтре данные отсутствуют.';
+
+        preloaderOn();
+
+        document.addEventListener('DOMContentLoaded', function () {
+            init();
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                preloaderOn();
+                init();
+            });
+        })
+
+        function init() {
+            var formData = new FormData(form);
+            var url      = form.getAttribute('action');
+
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    preloaderOff();
+                    buildCharts(data);
+                })
+                .catch(error => {
+                    console.log(error);
+                    preloaderOff();
+                    alert('Что-то пошло не так, попробуйте снова');
+                });
+        }
+
+        function buildCharts(data) {
+            checkData(data['ratingData'], ratingChartNode, ratingErrorNode);
+            var ratingData = prepareDonutData(data['ratingData']);
+            var ratingOpt  = donutOptions(ratingData);
+            if (!ratingChart) {
+                ratingChart = new ApexCharts(ratingChartNode, ratingOpt);
+                ratingChart.render();
+            } else {
+                ratingChart.updateOptions({
+                    series: [
+                        ratingData['rating1'],
+                        ratingData['rating2'],
+                        ratingData['rating3'],
+                        ratingData['rating4'],
+                        ratingData['rating5'],
+                    ]
+                });
+            }
+
+            checkData(data['reasonData'], reasonChartNode, reasonErrorNode);
+            var reasonData = prepareBarData(data['reasonData']);
+            var reasonOpt  = barOptions(reasonData);
+            if (!reasonChart) {
+                reasonChart = new ApexCharts(reasonChartNode, reasonOpt);
+                reasonChart.render();
+            } else {
+                reasonChart.updateOptions({
+                    series: [{ data: reasonData.count }],
+                    xaxis: { categories: reasonData.answers }
+                });
+            }
+
+            checkData(data['sourceData'], sourceChartNode, sourceErrorNode);
+            var sourceData = prepareBarData(data['sourceData']);
+            var sourceOpt  = barOptions(sourceData);
+            if (!sourceChart) {
+                sourceChart = new ApexCharts(sourceChartNode, sourceOpt);
+                sourceChart.render();
+            } else {
+                sourceChart.updateOptions({
+                    series: [{ data: sourceData.count }],
+                    xaxis: { categories: sourceData.answers }
+                });
+            }  
+        }
+
+        function prepareDonutData(data) {
+            let result = [];
+
+            result['rating1'] = 0;
+            result['rating2'] = 0;
+            result['rating3'] = 0;
+            result['rating4'] = 0;
+            result['rating5'] = 0;
+
+            for (let i = 0; i < data.length ; i++) {
+                switch (data[i].rating) {
+                    case 1:
+                        result['rating1'] = data[i].count;
+                        break;
+                    case 2:
+                        result['rating2'] = data[i].count;
+                        break;
+                    case 3:
+                        result['rating3'] = data[i].count;
+                        break;
+                    case 4:
+                        result['rating4'] = data[i].count;
+                        break;
+                    case 5:
+                        result['rating5'] = data[i].count;
+                        break;
+                }
+            }
+
+            return result;
+        }
+
+        function donutOptions(data) {
+            return {
+                chart: {
+                    type: 'donut',
+                    height: 400,
+                    toolbar: {
+                        show: true,
+                    },
+                },
+                series: [
+                    data['rating1'],
+                    data['rating2'],
+                    data['rating3'],
+                    data['rating4'],
+                    data['rating5'],
+                ],
+                labels: ['Рейтинг 1', 'Рейтинг 2', 'Рейтинг 3', 'Рейтинг 4', 'Рейтинг 5'],
+                plotOptions: {
+                    pie: {
+                        customScale: 0.8,
+                    }
+                },
+                legend: {
+                    position: 'right',
+                    offsetY: 25,
+                    width: 270,
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function (val) {
+                        return val.toFixed(1) + "%"
+                    },
+                    style: {
+                        fontSize: '1.2rem',
+                    },
+                },
+            };
+        }
+
+        function prepareBarData(data) {
+            let result = {
+                answers: [],
+                count: [],
+            };
+
+            for (let key in data) {
+                result.answers.push(key);
+                result.count.push(data[key]);
+            }
+
+            return result;
+        }
+            
+        function barOptions(data) {
+             return {
+                series: [
+                    {
+                        name: 'Кол.-во ответов',
+                        data: data.count,
+                    }
+                ],
+                chart: {
+                    type: 'bar',
+                    height: 400,
+                    toolbar: {
+                        show: true,
+                    },
+                    zoom: {
+                        enabled: false,
+                    },
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: false,
+                        columnWidth: '50%',
+                        distributed: true,
+                    },
+                },
+                dataLabels: {
+                    // enabled: false,
+                    style: {
+                        fontSize: '1.2rem',
+                    },
+                },
+                legend: {
+                    show: true,
+                    position: 'right',
+                    offsetY: 25,
+                    width: 270, 
+                },
+                xaxis: {
+                    categories: data.answers,
+                    labels: {
+                        show: true,
+                        rotate: -25,
+                        style: {
+                            fontSize: '10px',
+                            fontWeight: 600,
+                        }
+                    },
+                },
+                stroke: {
+                    width: 1,
+                    colors: ['transparent']
+                },
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            return val.toFixed();
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkData(data, chartNode, errorNode) {
+            if (data.length !== 0) {
+                errorNode.innerHTML = '';
+                chartNode.style.display = 'block';
+            } else {
+                chartNode.style.display = 'none';
+                errorNode.innerHTML = errorMessage;
+            }
+        }
+
+        function preloaderOn() {
+            wrapper.style.opacity = 0.7;
+            btn.setAttribute('disabled', true);
+        }
+
+        function preloaderOff() {
+            wrapper.style.opacity = 'unset';
+            btn.removeAttribute('disabled');
+        }
+
+    </script>
+{% endblock body_javascript %}

@@ -1,0 +1,12 @@
+<div class="user_promocode_wrapper">
+    <form id="user_promocode_form" action="{{ path('#') }}" method="POST" enctype="multipart/form-data">
+        <div class="user_promocode_form__row">
+            <label for="user_code">Введите..</label>
+            <input type="text" name="user_promocode" id="user_code">
+        </div>
+        <input type="hidden" name="action_id" value={{ action.id }}>
+        <button class="promocode_btn user_promocode_form__row" type="submit">Загрузить</button>
+    </form>
+    <div class="user_promocode_success-node"></div>
+    <div class="user_promocode_error-node"></div>
+</div>
